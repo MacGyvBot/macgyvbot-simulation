@@ -33,3 +33,6 @@ log/
 .env
 .env.*
 !.env.example
+
+# Isaac Sim local render outputs
+outputs/isaacsim/
