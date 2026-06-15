@@ -5,6 +5,8 @@ MacGyvBot simulation 저장소는 저장소 루트의 `macgvbot.usd` 장면을 I
 
 현재 저장소는 ROS 2 runtime workspace가 아니라 Isaac Sim 장면 캡처용 저장소입니다.
 
+<video src="https://github.com/user-attachments/assets/f166431d-da58-4cc5-a64a-46b072b446c6" autoplay loop muted playsinline width="100%"></video>
+
 ## 파일 구조
 
 ```text
