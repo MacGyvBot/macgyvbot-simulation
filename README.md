@@ -26,7 +26,7 @@ scripts/isaacsim/run_render_macgvbot_usd.sh \
   --tool screwdriver \
   --drawer-id 1 \
   --drawer-prim /drawer/drawer_floor_02 \
-  --articulation-root /m0609/base_link \
+  --drawer-control physics 
   --no-headless \
   --frames 180 \
   --no-video
@@ -60,8 +60,8 @@ scripts/isaacsim/run_render_macgvbot_usd.sh \
   - `--video`가 켜져 있으면 `ffmpeg`로 mp4를 생성합니다.
   - `--simulate-twin`이 켜져 있으면 스크립트 내부 joint waypoint를 사용해 로봇과
     그리퍼 target을 갱신합니다.
-  - `--drawer-prim`이 지정되면 해당 prim을 지정 축으로 이동시켜 서랍 열림 동작을
-    함께 캡처합니다.
+  - 선택한 서랍의 기존 rigid body와 prismatic joint를 사용하며, 그리퍼와 손잡이의
+    collider 접촉력으로 서랍을 움직입니다.
 
 - `docs/simulation/isaacsim_macgvbot_usd.md`
   - Isaac Sim 실행 준비, 기본 캡처 명령, 출력 위치, 자주 쓰는 옵션을 설명합니다.

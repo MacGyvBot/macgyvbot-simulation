@@ -90,19 +90,87 @@ scripts/isaacsim/run_render_macgvbot_usd.sh \
 
 ## 서랍 움직임 옵션
 
-서랍의 움직이는 파트 prim path를 알고 있다면 `--drawer-prim`을 지정해서 간단한
-열림 애니메이션을 같이 캡처할 수 있습니다.
+서랍의 움직이는 rigid body prim path를 `--drawer-prim`으로 지정하면 기존
+prismatic joint의 범위와 damping을 설정하고 그리퍼 접촉력으로 서랍을 움직입니다.
 
 ```bash
 scripts/isaacsim/run_render_macgvbot_usd.sh \
-  --drawer-prim /World/Drawer/SlidingPart \
+  --drawer-prim /drawer/drawer_floor_02 \
   --drawer-axis x \
   --drawer-distance 0.26
 ```
 
 `--drawer-prim`은 실제 USD 안의 prim path와 일치해야 합니다. Isaac Sim GUI에서
 `macgvbot.usd`를 열고 Stage 패널에서 움직일 서랍 파트를 선택하면 prim path를 확인할
-수 있습니다. 축 방향이 반대라면 `--drawer-distance -0.26`처럼 음수를 사용합니다.
+수 있습니다. 현재 USD에서 로컬 `+X`는 월드 `-X` 방향이므로 양수 거리 `0.26`이
+서랍이 로봇 쪽으로 열리는 범위입니다.
+
+## 서랍 제어 모드 (`--drawer-control`)
+
+`--drawer-control`로 서랍이 움직이는 방식을 선택합니다. 기본값은 `animated`입니다.
+
+- `animated`(기본): 기존 동작을 그대로 유지합니다.
+- `physics`: 서랍 transform을 직접 조작하지 않고, **그리퍼가 손잡이를 잡는 순간
+  생성되는 grasp constraint(FixedJoint)로만** 서랍을 움직입니다. 서랍 이동은 로봇
+  움직임 → gripper link → grasp constraint → drawer rigid body → prismatic joint
+  의 물리 결과입니다.
+
+```bash
+scripts/isaacsim/run_render_macgvbot_usd.sh \
+  --tool screwdriver \
+  --drawer-id 1 \
+  --drawer-prim /drawer/drawer_floor_02 \
+  --drawer-control physics \
+  --no-headless \
+  --frames 180 \
+  --no-video
+```
+
+`physics` 모드 동작 흐름:
+
+1. 로봇이 `JOINT_BOUNDARIES["HANDLE"]` 하드코딩 pose(손잡이 위치)로 이동 (auto-IK·grasp gate 미사용)
+2. 그리퍼 close → `gripper_body`와 선택 drawer 사이에 grasp constraint 생성
+3. 로봇이 `JOINT_BOUNDARIES["PULL"]`로 이동 → 서랍이 prismatic 축을 따라 물리적으로 열림
+4. 로봇이 다시 HANDLE pose로 복귀 → 서랍이 물리적으로 닫힘
+5. 그리퍼 open → grasp constraint 제거
+
+`--grasp-anchor`로 서랍을 묶을 그리퍼 rigid-body link를 바꿀 수 있습니다(기본은
+손끝 `/m0609/onrobot_rg2ft/left_inner_finger` — 서랍을 손잡이 근처에 고정).
+grasp constraint는 손끝이 실제로 손잡이에 닿았을 때(손끝중점↔손잡이 ≤
+`--grasp-center-tolerance`)만 생성되며, 닿지 않은 채 fallback 시점이 지나면
+경고와 함께 강제로 결합해 동작이 멈추지 않게 합니다.
+
+`--drawer-open-fraction`(기본 0.95)으로 서랍이 열리는 정도를 조절합니다. 값이 클수록
+더 많이 열립니다. 이 값은
+HANDLE→PULL 포즈 이동량의 비율이며, 서랍은 손끝 이동량만큼만 물리적으로 열립니다
+(과도한 인출 방지). 1.0이면 기존처럼 PULL 포즈까지 완전히 이동합니다.
+
+`--grasp-pose-offset`(기본 `0,0,0,0,0,0`, 비활성)로 grasp/pull 포즈에 관절별 각도(도)
+오프셋을 더해 손끝 위치를 미세조정할 수 있습니다. 예: `2,0,0,0,0,0`(joint_1 좌우),
+`0,-3,0,0,0,0`(joint_2 상하). 기본은 보정 없이 원래 HANDLE 포즈를 사용합니다.
+
+비선택 서랍은 physics 모드에서 kinematic으로 고정되어, 홈 복귀 중 그리퍼가 스쳐도
+열리지 않습니다.
+
+`--gripper-closed-degrees`(기본 50, 범위 ~0..67.6)로 그리퍼가 닫힐 때 `finger_joint`
+목표 각도를 조절합니다. 값이 클수록 손가락 간격이 좁아져 더 꽉 쥡니다. 실제 서랍
+결합은 grasp constraint가 담당하므로 이 값은 주로 시각적 악력입니다.
+
+physics 모드에서는 손잡이로 가기 전 관찰(탐지/인스펙션) 포즈를 경유하지 않고 HOME에서
+곧바로 손잡이 접근 자세로 이동합니다.
+
+검증용 로그(`[PHYSICS]` 접두):
+
+```text
+[PHYSICS] drawer setup done: prim=..., joint=..., rest=...
+[PHYSICS] grasp constraint created @frame N ...
+[PHYSICS] frame N: drawer disp=... m        # 열림에 따라 증가
+[PHYSICS] grasp constraint removed @frame N ...
+[PHYSICS] RESULT open=True (max .../... m), close=True (final ... m)
+```
+
+`RESULT`의 성공 판정 기준: pull 후 서랍이 목표거리의 50% 이상 열렸으면
+`open=True`, push 후 서랍이 원위치 ±3cm 이내로 돌아오면 `close=True`.
 
 ## 스크립트 위치
 
